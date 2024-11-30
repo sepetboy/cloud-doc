@@ -2,27 +2,31 @@ import React, { useState, useEffect, useRef } from "react";
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
 import {faEdit, faTimes, faTrash} from '@fortawesome/free-solid-svg-icons'
 import {faMarkdown} from '@fortawesome/free-brands-svg-icons'
-import PropTypes from "prop-types";
+import { FileType } from "../types";
 
 const FileList = (params: {
-    files: any,
-    onFileClick: any,
-    onFileEdit: any,
-    onFileDelete: any
+    files: FileType[],
+    onFileClick: Function,
+    onFileEdit: Function,
+    onFileDelete: Function
 })=> {
+    let node:any = useRef(null)
     const { files, onFileClick, onFileEdit, onFileDelete} = params
     const [editId, setEditId] = useState("")
     const [value, setValue] = useState('')
     const closeSearch = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>)=> {
         e.preventDefault()
         setEditId("")
-        setValue('')
+        setValue("")
+        const editItem = files.find((file:any) => file.id === editId)
+        if(editItem?.isNew) {
+            onFileDelete(editItem.id)
+        }
     }
     useEffect(() => {
         const handleInputEvent = (event:any)=> {
           const { keyCode } = event
-          if(keyCode === 13 && editId) {
-            // const editItem = files.find((file:any) => file.id === editId)
+          if(keyCode === 13 && editId && value.trim() !== '') {
             onFileEdit(editId,value)
             setEditId("")
             setValue('')
@@ -35,15 +39,27 @@ const FileList = (params: {
           document.removeEventListener('keyup', handleInputEvent)
         }
       },)
+    useEffect(() => {
+        const newFile = files.find(file => file.isNew)
+        if(newFile) {
+            setEditId(newFile.id)
+            setValue(newFile.title )
+        }
+    }, [files])
+    useEffect(()=> {
+        if(editId) {
+            node.current.focus()
+        }
+    },[editId])
     return (
         <ul className="list-group list-group-flush file-list">
             {
                 files.map((file:any) => (
                     <li 
-                        className="list-group-item bg-light row d-flex align-items-center file-item"
+                        className="list-group-item bg-light row d-flex align-items-center file-item mx-0"
                         key={file.id}
                     >
-                        { (file.id !== editId) &&
+                        { (file.id !== editId && !file.isNew) &&
                         <>
                         <span className="col-2">
                             <FontAwesomeIcon 
@@ -52,7 +68,7 @@ const FileList = (params: {
                             />
                         </span>
                         <span 
-                            className="col-7 c-link"
+                            className="col-6 c-link"
                             onClick={()=> {onFileClick(file.id)}}
                         >{file.title}</span>
                         <button 
@@ -81,17 +97,19 @@ const FileList = (params: {
                             />
                         </button>
                         </>}
-                        {(file.id === editId) &&
+                        {(file.id === editId || file.isNew) &&
                         <>
                             <input 
-                            className="form-control col-10" 
-                            value={value} 
-                            onChange={(e)=> {setValue(e.target.value)}}
+                                className="form-control col-10" 
+                                ref={node}
+                                value={value} 
+                                placeholder="请输入文件名称"
+                                onChange={(e)=> {setValue(e.target.value)}}
                             />
                             <button 
-                            type="button" 
-                            className="icon-button col-2" 
-                            onClick={closeSearch}
+                                type="button" 
+                                className="icon-button col-2" 
+                                onClick={closeSearch}
                             >
                             <FontAwesomeIcon 
                                 icon={faTimes}
@@ -106,13 +124,6 @@ const FileList = (params: {
             }
         </ul>
     )
-}
-
-FileList.propTypes = {
-    files: PropTypes.array,
-    onFileClick: PropTypes.func,
-    onFileEdit: PropTypes.func,
-    onFileDelete: PropTypes.func,
 }
 
 export default FileList

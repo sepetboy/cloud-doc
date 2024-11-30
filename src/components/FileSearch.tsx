@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
 import {faSearch, faTimes} from '@fortawesome/free-solid-svg-icons'
-import PropTypes from "prop-types";
 import useKeyPress from "../hooks/useKeyPress";
 
-const FileSearch = (params: { title: string; onFileSearch: any }) => {
+const FileSearch = (params: { title: string; onFileSearch: Function }) => {
   const [inputActive, setInputActive] = useState(false);
   const [value, setValue] = useState("");
   const {keyPressed:enterPressed} = useKeyPress(13)
   const {event:escEvent, keyPressed:escPressed} = useKeyPress(27)
-  const {title, onFileSearch} = params
+  const {title = "我的云文档", onFileSearch} = params
   const node:React.LegacyRef<HTMLInputElement> | null = useRef(null)
   const closeSearch = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>)=> {
     e.preventDefault()
     setInputActive(false)
     setValue('')
+    onFileSearch('')
   }
 
   useEffect(() => {
@@ -74,14 +74,5 @@ const FileSearch = (params: { title: string; onFileSearch: any }) => {
     }
   </div>;
 };
-
-FileSearch.propTypes = {
-  title: PropTypes.string,
-  onFileSearch: PropTypes.func.isRequired
-}
-
-FileSearch.defaultProps = {
-  title: '我的云文档'
-}
 
 export default FileSearch
