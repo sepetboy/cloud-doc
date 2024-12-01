@@ -12,3 +12,10 @@ export const defaultFiles = [
     createdAt: 13812341234,
   },
 ];
+
+export const defaultFile = {
+  id: "",
+  title: "",
+  body: "",
+  createdAt: new Date().getTime(),
+};

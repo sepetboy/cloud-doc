@@ -25,9 +25,10 @@ const FileList = (params: {
     }
     useEffect(() => {
         const handleInputEvent = (event:any)=> {
+          const editItem = files.find((file:any) => file.id === editId)
           const { keyCode } = event
           if(keyCode === 13 && editId && value.trim() !== '') {
-            onFileEdit(editId,value)
+            onFileEdit(editId, value, editItem?.isNew)
             setEditId("")
             setValue('')
           } else if(keyCode === 27 && editId) {

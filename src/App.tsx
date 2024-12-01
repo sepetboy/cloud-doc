@@ -1,33 +1,63 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css'
 import "easymde/dist/easymde.min.css"; //https://github.com/RIP21/react-simplemde-editor
 import SimpleMDE from 'react-simplemde-editor'
+import MDE_TYPE from "easymde";
 import {v4 as uuidv4} from 'uuid'
-import {faPlus, faFileImport} from '@fortawesome/free-solid-svg-icons'
+import {faPlus, faFileImport, faSave} from '@fortawesome/free-solid-svg-icons'
 import FileSearch from './components/FileSearch'
 import FileList from './components/FileList'
 import BottomBtn from './components/BottomBtn';
 import TabList from './components/TabList';
-import {defaultFiles} from './mocks/files'
-import { FileType } from './types';
+import {defaultFile} from './mocks/files'
+import { FileObj, FileType } from './types';
+import { flattenArr, objToArr } from './utils/helper'
+import fileHelper from './utils/fileHelper';
+
+// require node.js modules
+const { join } = window.require('path')
+// 获取主进程
+const remote = window.require('@electron/remote')
+const Store = window.require('electron-store');
+const fileStore = new Store({'name': 'Files Data'})
+const saveFilesToStore = (files: FileObj<FileType>) => {
+  // isNew和body不存在在store里面
+  const filesStoreObj = objToArr(files).reduce((result: FileObj<FileType>, file: FileType) => {
+    const { id, path, title, createdAt} = file
+    result[id] = {
+      id,
+      path,
+      title,
+      createdAt
+    }
+    return result
+  }, {})
+  fileStore.set('files', filesStoreObj)
+}
 
 function App() {
-  const [files, setFiles] = useState(defaultFiles as FileType[])
+  const [files, setFiles] = useState(fileStore.get('files') || {})
   const [activeFileID, setActiveFiledID] = useState('')
   const [openedFileIDs, setOpenedFileIDS] = useState([] as string[])
   const [unsavedFileIDs, setUnsavedFileIDs] = useState([] as string[])
   const [searchedFiles, setSearchedFiles] = useState([] as FileType[])
+  const filesArr = objToArr<FileType>(files)
+  const savedLocation = join(remote.app.getPath('documents'), '.electron-cache')
+  console.log(remote.app.getPath('userData'))
   const openedFiles = openedFileIDs.map(openID => {
-    return files.find(file => file.id === openID) || { 
-      id: openID,
-      title: '',
-      body: '',
-      createdAt: new Date().getTime()
-    }
+    return files[activeFileID] || {...defaultFile, id: openID}
   })
-  const activeFile = files.find(file => file.id === activeFileID)
-  const fileListArr = (searchedFiles.length > 0 ? searchedFiles : files)
+  const activeFile = files[activeFileID]
+  const fileListArr = (searchedFiles.length > 0 ? searchedFiles : filesArr)
+  console.log("fileListArr", fileListArr)
+  const autofocusNoSpellcheckerOptions = useMemo(() => {
+    return {
+      autofocus: true,
+      spellChecker: false,
+      minHeight: '515px'
+    } as MDE_TYPE.Options;
+  }, []);
   const fileClick = (fileID:string) => {
     setActiveFiledID(fileID)
     if(!openedFileIDs.includes(fileID)) {
@@ -48,54 +78,63 @@ function App() {
   }
 
   const fileChange = (id: string, value: string) => {
-    const newFiles = files.map(file => {
-      if(file.id === id) {
-        file.body = value
+    if (value !== files[id].body) {
+      const newFile = { ...files[id], body: value}
+      setFiles({...files, [id]: newFile})
+      if(!unsavedFileIDs.includes(id)) {
+        setUnsavedFileIDs([...unsavedFileIDs, id])
       }
-      return file
-    })
-    setFiles(newFiles)
-    if(!unsavedFileIDs.includes(id)) {
-      setUnsavedFileIDs([...unsavedFileIDs, id])
     }
   }
 
-  const deleteFile = (id:string) => {
-    const newFiles = files.filter(file => file.id !== id)
-    setFiles(newFiles)
+  const deleteFile = async (id:string) => {
+    await fileHelper.deleteFile(files[id].path)
+    delete files[id]
+    setFiles(files)
+    saveFilesToStore(files)
     tabClose(id)
   }
 
-  const updateFileName = (id:string, title:string) => {
-    const newFiles = files.map(file => {
-      if(file.id === id) {
-        file.title = title
-        file.isNew = false
-      }
-      return file
-    })
-    setFiles(newFiles)
+  const updateFileName = (id:string, title:string, isNew: boolean) => {
+    const newPath = join(savedLocation, `${title}.md`)
+    const modifiedFile = { ...files[id], title, isNew: false, path: newPath}
+    const newFiles = {...files, [id]: modifiedFile}
+    if(isNew) {
+      fileHelper.writeFile(newPath, files[id].body).then((data: any) => {
+        setFiles(newFiles)
+        saveFilesToStore(newFiles)
+      })
+    } else {
+      const oldPath = join(savedLocation, `${files[id].title}.md`)
+      fileHelper.renameFile(oldPath, newPath).then((data:any)=> {
+        setFiles(newFiles)
+        saveFilesToStore(newFiles)
+      })
+    }
   }
 
   const fileSearch = (keyword: string) => {
-    const newFiles = files.filter(file => file.title.includes(keyword))
+    const newFiles = filesArr.filter(file => file.title.includes(keyword))
     setSearchedFiles(newFiles)
   }
 
   const createNewFile = ()=> {
     const newID = uuidv4()
-    const newFiles = [
-      ...files,
-      {
-        id: newID,
-        title: '',
-        body: "## 请输入 Markdown",
-        createdAt: new Date().getTime(),
-        isNew: true
-      }
-    ]
-    setFiles(newFiles)
+    const newFile = {
+      id: newID,
+      title: '',
+      body: "## 请输入 Markdown",
+      createdAt: new Date().getTime(),
+      isNew: true
+    }
+    setFiles({...files, [newID]: newFile})
   }
+  const saveCurrentFile = () => {
+    fileHelper.writeFile(join(savedLocation, `${activeFile.title}.md`), activeFile.body).then(() => {
+      setUnsavedFileIDs(unsavedFileIDs.filter(id => id !== activeFileID))
+    })
+  }
+
   return (
     <div className="App container-fluid px-0">
       <div className='row no-gutters'>
@@ -150,10 +189,16 @@ function App() {
                 key={activeFile && activeFile.id}
                 value={activeFile && activeFile.body}
                 onChange={(value)=> {fileChange(activeFile.id,value)}}
-                options={{
-                  minHeight: '515px'
-                }}
+                options={ autofocusNoSpellcheckerOptions }
               />
+              <div className='col-6'>
+                <BottomBtn 
+                  text='保存'
+                  colorClass='btn-success'
+                  icon={faSave}
+                  onBtnClick={saveCurrentFile}
+                />
+              </div>
             </>
           }
         </div>

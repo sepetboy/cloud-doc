@@ -12,7 +12,7 @@ const TabList = (params: {
     onTabClick?:Function,
     onCloseTab?:Function
 })=> {
-    const { files, activeId, unsaveIds, onTabClick, onCloseTab} = params
+    const { files, activeId = '', unsaveIds = [], onTabClick, onCloseTab} = params
 
     return(
         <ul className="nav nav-pills tablist-component">
@@ -53,10 +53,6 @@ const TabList = (params: {
             }
         </ul>
     )
-}
-
-TabList.defaultProps = {
-    unsaveIds: []
 }
 
 export default TabList
